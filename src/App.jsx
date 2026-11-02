@@ -8,27 +8,30 @@ const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || "";
 const supabase = SUPABASE_URL && SUPABASE_ANON_KEY ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
 
 // ─── MusicBrainz song search ───────────────────────────────────────────────────
-async function searchMusicBrainz(query) {
-  if (!query || query.length < 2) return [];
-  const url = `https://musicbrainz.org/ws/2/recording/?query=${encodeURIComponent(query)}&limit=8&fmt=json`;
-  let res;
-  try {
-    res = await fetch(url);
-  } catch (e) {
-    console.error("MusicBrainz request failed", e);
-    return [];
-  }
+async function searchSpotify(query) {
+  const res = await fetch(`/api/spotify?q=${encodeURIComponent(query)}`);
   if (!res.ok) return [];
   const data = await res.json();
-  return (data.recordings || []).map((r) => ({
-    id: r.id,
-    title: r.title,
-    artist: r["artist-credit"]?.[0]?.name || "Unknown Artist",
-    album: r.releases?.[0]?.title || "",
-    year: r["first-release-date"]?.slice(0, 4) || "",
-    duration: r.length ? formatMs(r.length) : "",
-    bpm: null,
+  return (data.tracks || []).map((t) => ({
+    ...t,
+    duration: t.durationMs ? formatMs(t.durationMs) : "",
   }));
+}
+
+async function searchSongs(query) {
+  try {
+    const results = await searchSpotify(query);
+    if (results.length) return results;
+  } catch (e) {
+    console.error("Spotify search failed", e);
+  }
+  try {
+    const results = await searchITunes(query);
+    if (results.length) return results;
+  } catch (e) {
+    console.error("iTunes search failed", e);
+  }
+  return searchMusicBrainz(query);
 }
 
 function formatMs(ms) {
