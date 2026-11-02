@@ -11,9 +11,13 @@ const supabase = SUPABASE_URL && SUPABASE_ANON_KEY ? createClient(SUPABASE_URL, 
 async function searchMusicBrainz(query) {
   if (!query || query.length < 2) return [];
   const url = `https://musicbrainz.org/ws/2/recording/?query=${encodeURIComponent(query)}&limit=8&fmt=json`;
-  const res = await fetch(url, {
-    headers: { "User-Agent": "CrateDig/1.0 (contact@cratedig.app)" },
-  });
+  let res;
+  try {
+    res = await fetch(url);
+  } catch (e) {
+    console.error("MusicBrainz request failed", e);
+    return [];
+  }
   if (!res.ok) return [];
   const data = await res.json();
   return (data.recordings || []).map((r) => ({
