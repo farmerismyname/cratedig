@@ -3,9 +3,9 @@ import { createClient } from "@supabase/supabase-js";
 
 // ─── Supabase config ───────────────────────────────────────────────────────────
 // Replace these with your own Supabase project URL + anon key
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || "YOUR_SUPABASE_URL";
-const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || "YOUR_SUPABASE_ANON_KEY";
-const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || "";
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || "";
+const supabase = SUPABASE_URL && SUPABASE_ANON_KEY ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
 
 // ─── MusicBrainz song search ───────────────────────────────────────────────────
 async function searchMusicBrainz(query) {
@@ -345,7 +345,7 @@ export default function App() {
   async function fetchPairings() {
     setLoading(true);
     try {
-      if (SUPABASE_URL === "YOUR_SUPABASE_URL") throw new Error("demo");
+      if (!supabase) throw new Error("demo");
       const { data, error } = await supabase
         .from("pairings")
         .select("*")
