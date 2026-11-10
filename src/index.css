@@ -897,3 +897,6 @@ body {
 .card-sub-pill { color: var(--accent2); border-color: rgba(255, 95, 176, 0.4); }
 .profile-filters { max-width: 640px; }
 @media (max-width: 600px) { .form-grid-3 .private-toggle { grid-column: 1 / -1; } }
+
+/* Card pills: show Title Case instead of forced caps */
+.card-genre-pill { text-transform: none; letter-spacing: 0.02em; font-size: 0.72rem; }
