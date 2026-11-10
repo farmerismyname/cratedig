@@ -719,3 +719,92 @@ body {
   .ts-row { flex-direction: column; }
   .ts-arrow { display: none; }
 }
+
+/* ─── Submit form v2: compact, fits one screen ───────────────────────────────── */
+.modal.modal-compact {
+  max-width: 720px;
+  gap: 0.8rem;
+  padding: 1.3rem 1.5rem;
+  max-height: 96vh;
+}
+
+.modal-compact .modal-head { display: flex; flex-direction: column; gap: 0.15rem; padding-right: 2rem; }
+.modal-compact .modal-title { font-size: 1.2rem; }
+.modal-compact .modal-subtitle { margin-top: 0; font-size: 0.75rem; }
+
+.form-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0.8rem; align-items: start; }
+.form-grid-3 { display: grid; grid-template-columns: 1fr 1fr 1.2fr; gap: 0.8rem; align-items: end; }
+
+.modal-compact .song-search-wrap { min-width: 0; }
+.modal-compact .search-input-row { padding: 0 0.7rem; }
+.modal-compact .song-input { padding: 0.6rem 0; font-size: 0.82rem; }
+.modal-compact .search-dropdown { max-height: 220px; }
+.modal-compact .selected-song-badge {
+  margin-top: 0.35rem;
+  padding: 0.25rem 0.6rem;
+  font-size: 0.7rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: block;
+}
+.modal-compact .badge-dot { display: inline-block; margin-right: 0.4rem; vertical-align: middle; }
+.modal-compact .badge-duration { display: none; }
+
+.modal-compact .ts-input { padding: 0.6rem 0.5rem; font-size: 0.95rem; }
+
+.select-input {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.6rem 0.7rem;
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 0.85rem;
+  outline: none;
+  width: 100%;
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+.select-input:focus { border-color: var(--accent); }
+.select-input option { background: var(--surface2); color: var(--text); }
+
+.private-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  align-self: end;
+  padding: 0.6rem 0.8rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface2);
+  font-size: 0.8rem;
+  cursor: pointer;
+  user-select: none;
+}
+.private-toggle input { accent-color: var(--accent); width: 16px; height: 16px; cursor: pointer; flex-shrink: 0; }
+.private-toggle em { color: var(--muted); font-style: normal; font-size: 0.7rem; }
+.private-toggle:has(input:checked) { border-color: var(--accent); }
+
+.modal-compact .note-input { min-height: 56px; padding: 0.6rem 0.8rem; resize: none; }
+.modal-compact .form-error { padding: 0.4rem 0.7rem; }
+
+.modal-compact .submit-btn {
+  position: sticky;
+  bottom: 0;
+  padding: 0.85rem;
+  box-shadow: 0 -10px 16px var(--surface);
+}
+
+/* Card pills */
+.card-pills { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.card-type-pill { color: var(--accent); border-color: rgba(232, 255, 60, 0.35); }
+.card-private-pill { color: var(--accent2); border-color: rgba(255, 60, 170, 0.35); }
+
+@media (max-width: 600px) {
+  .modal.modal-compact { padding: 1rem; }
+  .form-grid-2 { grid-template-columns: 1fr; }
+  .form-grid-3 { grid-template-columns: 1fr 1fr; }
+  .form-grid-3 .ts-field:last-child { grid-column: 1 / -1; }
+  .modal-compact .ts-row { flex-direction: row; }
+}
