@@ -3,11 +3,10 @@ import { createClient } from "@supabase/supabase-js";
 
 // ─── Supabase config ───────────────────────────────────────────────────────────
 // Replace these with your own Supabase project URL + anon key
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || "";
-const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || "";
-const supabase = SUPABASE_URL && SUPABASE_ANON_KEY ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || "YOUR_SUPABASE_URL";
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || "YOUR_SUPABASE_ANON_KEY";
+const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-// ─── MusicBrainz song search ───────────────────────────────────────────────────
 // ─── Song search (Spotify → iTunes → MusicBrainz) ──────────────────────────────
 function formatMs(ms) {
   const s = Math.floor(ms / 1000);
@@ -72,6 +71,41 @@ async function searchSongs(query) {
   } catch (e) {
     console.error("MusicBrainz search failed", e);
     return [];
+  }
+}
+
+// ─── Time input helpers ───────────────────────────────────────────────────────
+// Typing 145 shows 1:45. Typing 45 and leaving the box gives 0:45.
+function formatTimeInput(raw) {
+  const digits = raw.replace(/\D/g, "").slice(0, 4);
+  if (digits.length <= 2) return digits;
+  return `${digits.slice(0, -2)}:${digits.slice(-2)}`;
+}
+
+function normalizeTime(value) {
+  const digits = value.replace(/\D/g, "");
+  if (!digits) return "";
+  if (digits.length <= 2) return `0:${digits.padStart(2, "0")}`;
+  const mins = digits.slice(0, -2).replace(/^0+(?=\d)/, "");
+  return `${mins}:${digits.slice(-2)}`;
+}
+
+// ─── Transition types ─────────────────────────────────────────────────────────
+const TRANSITION_TYPES = ["Double", "Chops", "Switch", "Fade in/out", "Other"];
+
+// ─── Private-post owner id (kept in this browser only) ────────────────────────
+let memoryOwnerId = null;
+function getOwnerId() {
+  try {
+    let id = localStorage.getItem("cratedig_owner_id");
+    if (!id) {
+      id = crypto.randomUUID ? crypto.randomUUID() : String(Math.random()).slice(2) + Date.now();
+      localStorage.setItem("cratedig_owner_id", id);
+    }
+    return id;
+  } catch {
+    memoryOwnerId = memoryOwnerId || String(Math.random()).slice(2) + Date.now();
+    return memoryOwnerId;
   }
 }
 
@@ -233,7 +267,11 @@ function PairingCard({ pairing, onUpvote }) {
 
   return (
     <article className="pairing-card">
-      <div className="card-genre-pill">{pairing.genre}</div>
+      <div className="card-pills">
+        <div className="card-genre-pill">{pairing.genre}</div>
+        {pairing.transition_type && <div className="card-genre-pill card-type-pill">{pairing.transition_type}</div>}
+        {pairing.is_private && <div className="card-genre-pill card-private-pill">🔒 Private</div>}
+      </div>
 
       <div className="card-tracks">
         <div className="track track-a">
@@ -287,66 +325,101 @@ function SubmitForm({ onSubmit, onClose }) {
   const [songB, setSongB] = useState(null);
   const [tsA, setTsA] = useState("");
   const [tsB, setTsB] = useState("");
+  const [type, setType] = useState("");
   const [genre, setGenre] = useState("House");
+  const [isPrivate, setIsPrivate] = useState(false);
   const [note, setNote] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
   async function handleSubmit() {
-    if (!songA || !songB) return setError("Please select both tracks.");
-    if (!tsA || !tsB) return setError("Please add transition timestamps.");
-    if (!/^\d+:\d{2}$/.test(tsA) || !/^\d+:\d{2}$/.test(tsB))
-      return setError("Timestamps must be in M:SS format (e.g. 2:34).");
+    if (!songA || !songB) return setError("Please select both songs.");
+    const a = normalizeTime(tsA);
+    const b = normalizeTime(tsB);
+    if (!a || !b) return setError("Please add both transition times.");
+    const secondsOk = [a, b].every((t) => parseInt(t.split(":")[1], 10) <= 59);
+    if (!secondsOk) return setError("Seconds must be 59 or less (type 145 for 1:45).");
+    if (!type) return setError("Please select a transition type.");
+    if (type === "Other" && !note.trim())
+      return setError('Please describe your transition in the note when "Other" is selected.');
     setError("");
     setLoading(true);
-    await onSubmit({ songA, songB, tsA, tsB, genre, note });
+    await onSubmit({
+      songA, songB, tsA: a, tsB: b, genre,
+      note: note.trim(), transitionType: type, isPrivate,
+    });
     setLoading(false);
   }
 
   return (
     <div className="modal-backdrop" onClick={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="modal">
+      <div className="modal modal-compact">
         <button className="modal-close" onClick={onClose}>✕</button>
-        <h2 className="modal-title">Submit a Mix</h2>
-        <p className="modal-subtitle">Share a transition that actually works.</p>
-
-        <div className="form-section">
-          <SongSearch label="Track A (outgoing)" value={songA} onChange={setSongA} placeholder="Search track A…" />
+        <div className="modal-head">
+          <h2 className="modal-title">Submit a Mix</h2>
+          <p className="modal-subtitle">Share a transition that actually works.</p>
         </div>
 
-        <div className="form-section ts-row">
+        <div className="form-grid-2">
+          <SongSearch label="Song 1 (outgoing)" value={songA} onChange={setSongA} placeholder="Search song 1…" />
+          <SongSearch label="Song 2 (incoming)" value={songB} onChange={setSongB} placeholder="Search song 2…" />
+        </div>
+
+        <div className="form-grid-3">
           <div className="ts-field">
             <label className="ts-label-text">Transition out at</label>
-            <input className="ts-input" placeholder="e.g. 3:20" value={tsA} onChange={e => setTsA(e.target.value)} />
+            <input
+              className="ts-input"
+              inputMode="numeric"
+              placeholder="e.g. 320"
+              value={tsA}
+              onChange={(e) => setTsA(formatTimeInput(e.target.value))}
+              onBlur={() => setTsA(normalizeTime(tsA))}
+            />
           </div>
-          <div className="ts-arrow">→</div>
           <div className="ts-field">
-            <label className="ts-label-text">Drop in at</label>
-            <input className="ts-input" placeholder="e.g. 0:45" value={tsB} onChange={e => setTsB(e.target.value)} />
+            <label className="ts-label-text">Transition in at</label>
+            <input
+              className="ts-input"
+              inputMode="numeric"
+              placeholder="e.g. 045"
+              value={tsB}
+              onChange={(e) => setTsB(formatTimeInput(e.target.value))}
+              onBlur={() => setTsB(normalizeTime(tsB))}
+            />
+          </div>
+          <div className="ts-field">
+            <label className="ts-label-text">Transition Type:</label>
+            <select className="select-input" value={type} onChange={(e) => setType(e.target.value)}>
+              <option value="" disabled>Select…</option>
+              {TRANSITION_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+            </select>
           </div>
         </div>
 
-        <div className="form-section">
-          <SongSearch label="Track B (incoming)" value={songB} onChange={setSongB} placeholder="Search track B…" />
-        </div>
-
-        <div className="form-section">
-          <label className="ts-label-text">Genre</label>
-          <div className="genre-chips">
-            {GENRES.filter(g => g !== "All").map(g => (
-              <button key={g} className={`genre-chip ${genre === g ? "active" : ""}`} onClick={() => setGenre(g)}>{g}</button>
-            ))}
+        <div className="form-grid-2">
+          <div className="ts-field">
+            <label className="ts-label-text">Genre</label>
+            <select className="select-input" value={genre} onChange={(e) => setGenre(e.target.value)}>
+              {GENRES.filter((g) => g !== "All").map((g) => <option key={g} value={g}>{g}</option>)}
+            </select>
           </div>
+          <label className="private-toggle">
+            <input type="checkbox" checked={isPrivate} onChange={(e) => setIsPrivate(e.target.checked)} />
+            <span>🔒 Post privately <em>(only you can see it)</em></span>
+          </label>
         </div>
 
-        <div className="form-section">
-          <label className="ts-label-text">Note <span className="optional">(optional)</span></label>
+        <div className="ts-field">
+          <label className="ts-label-text">
+            Note <span className="optional">{type === "Other" ? "(required for Other)" : "(optional)"}</span>
+          </label>
           <textarea
             className="note-input"
             placeholder="Describe the technique, why it works, EQ tips…"
             value={note}
-            onChange={e => setNote(e.target.value)}
-            rows={3}
+            onChange={(e) => setNote(e.target.value)}
+            rows={2}
           />
         </div>
 
@@ -388,10 +461,11 @@ export default function App() {
   async function fetchPairings() {
     setLoading(true);
     try {
-      if (!supabase) throw new Error("demo");
+      if (SUPABASE_URL === "YOUR_SUPABASE_URL") throw new Error("demo");
       const { data, error } = await supabase
         .from("pairings")
         .select("*")
+        .or(`is_private.eq.false,owner_id.eq.${getOwnerId()}`)
         .order("created_at", { ascending: false })
         .limit(50);
       if (error) throw error;
@@ -403,7 +477,7 @@ export default function App() {
     setLoading(false);
   }
 
-  async function handleSubmit({ songA, songB, tsA, tsB, genre, note }) {
+  async function handleSubmit({ songA, songB, tsA, tsB, genre, note, transitionType, isPrivate }) {
     const newPairing = {
       song_a_title: songA.title,
       song_a_artist: songA.artist,
@@ -415,6 +489,9 @@ export default function App() {
       timestamp_b: tsB,
       genre,
       note,
+      transition_type: transitionType,
+      is_private: isPrivate,
+      owner_id: getOwnerId(),
       upvotes: 0,
       created_at: new Date().toISOString(),
     };
