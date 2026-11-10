@@ -8,6 +8,12 @@ const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || "";
 const supabase = SUPABASE_URL && SUPABASE_ANON_KEY ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
 
 // ─── MusicBrainz song search ───────────────────────────────────────────────────
+// ─── Song search (Spotify → iTunes → MusicBrainz) ──────────────────────────────
+function formatMs(ms) {
+  const s = Math.floor(ms / 1000);
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+}
+
 async function searchSpotify(query) {
   const res = await fetch(`/api/spotify?q=${encodeURIComponent(query)}`);
   if (!res.ok) return [];
@@ -15,6 +21,36 @@ async function searchSpotify(query) {
   return (data.tracks || []).map((t) => ({
     ...t,
     duration: t.durationMs ? formatMs(t.durationMs) : "",
+  }));
+}
+
+async function searchITunes(query) {
+  const url = `https://itunes.apple.com/search?term=${encodeURIComponent(query)}&media=music&entity=song&limit=12`;
+  const res = await fetch(url);
+  if (!res.ok) return [];
+  const data = await res.json();
+  return (data.results || []).map((r) => ({
+    id: `itunes-${r.trackId}`,
+    title: r.trackName,
+    artist: r.artistName,
+    album: r.collectionName || "",
+    year: r.releaseDate ? r.releaseDate.slice(0, 4) : "",
+    duration: r.trackTimeMillis ? formatMs(r.trackTimeMillis) : "",
+  }));
+}
+
+async function searchMusicBrainz(query) {
+  const url = `https://musicbrainz.org/ws/2/recording/?query=${encodeURIComponent(query)}&limit=8&fmt=json`;
+  const res = await fetch(url);
+  if (!res.ok) return [];
+  const data = await res.json();
+  return (data.recordings || []).map((r) => ({
+    id: r.id,
+    title: r.title,
+    artist: r["artist-credit"]?.[0]?.name || "Unknown Artist",
+    album: r.releases?.[0]?.title || "",
+    year: r["first-release-date"]?.slice(0, 4) || "",
+    duration: r.length ? formatMs(r.length) : "",
   }));
 }
 
@@ -31,12 +67,12 @@ async function searchSongs(query) {
   } catch (e) {
     console.error("iTunes search failed", e);
   }
-  return searchMusicBrainz(query);
-}
-
-function formatMs(ms) {
-  const s = Math.floor(ms / 1000);
-  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+  try {
+    return await searchMusicBrainz(query);
+  } catch (e) {
+    console.error("MusicBrainz search failed", e);
+    return [];
+  }
 }
 
 // ─── Genres ───────────────────────────────────────────────────────────────────
@@ -136,7 +172,7 @@ function SongSearch({ label, value, onChange, placeholder = "Search for a track�
     if (v.length < 2) { setResults([]); setOpen(false); return; }
     debounceRef.current = setTimeout(async () => {
       setLoading(true);
-      const r = await searchMusicBrainz(v);
+      const r = await searchSongs(v);
       setResults(r);
       setOpen(true);
       setLoading(false);
