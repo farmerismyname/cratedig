@@ -110,10 +110,18 @@ function getOwnerId() {
 }
 
 // ─── Genres ───────────────────────────────────────────────────────────────────
-const GENRES = [
-  "All", "House", "Techno", "Drum & Bass", "Jungle", "Garage",
-  "Trance", "Ambient", "Hip-Hop", "R&B", "Afrobeats", "Disco", "Funk", "Other",
-];
+const GENRE_TREE = {
+  "House": ["Deep house", "Tech house", "Progressive house", "Future house", "Afro house", "Acid house", "Electro house"],
+  "Drum n bass": ["Liquid", "Neurofunk", "Jump up", "Techstep", "Halftime"],
+  "Dubstep": ["Brostep", "Melodic dubstep", "Deep dubstep", "Tearout", "Deathstep"],
+  "Riddim": ["Minimal riddim", "Heavy riddim", "Melodic riddim"],
+  "Techno": ["Melodic techno", "Industrial techno", "Minimal techno", "Acid techno", "Hard techno"],
+  "Trance": ["Progressive trance", "Psytrance", "Uplifting trance", "Vocal trance", "Tech trance"],
+  "Trap": ["Festival trap", "Hybrid trap", "Chill trap", "Hard trap"],
+  "Jungle": ["Ragga jungle", "Old school jungle", "Darkcore"],
+  "Pop": ["Dance pop", "Electropop", "Synthpop", "Indie pop"],
+};
+const GENRES = ["All", ...Object.keys(GENRE_TREE)];
 
 // ─── Demo seed data (shown when DB isn't configured) ──────────────────────────
 const DEMO_PAIRINGS = [
@@ -125,7 +133,7 @@ const DEMO_PAIRINGS = [
     song_b_artist: "Massive Attack",
     timestamp_a: "3:20",
     timestamp_b: "0:08",
-    genre: "Ambient",
+    genre: "Pop",
     note: "Silky low-end handoff — let the bass tail from Blue Lines carry into the intro strings.",
     upvotes: 34,
     created_at: new Date(Date.now() - 86400000 * 2).toISOString(),
@@ -138,7 +146,7 @@ const DEMO_PAIRINGS = [
     song_b_artist: "DJ Barber / Carolina Carol Bela",
     timestamp_a: "6:10",
     timestamp_b: "0:00",
-    genre: "Drum & Bass",
+    genre: "Drum n bass",
     note: "Chop the amen breakdown hard. Reese bass locks in perfectly at 138bpm.",
     upvotes: 51,
     created_at: new Date(Date.now() - 86400000 * 1).toISOString(),
@@ -270,6 +278,7 @@ function PairingCard({ pairing, liked, onLike, canDelete, onDelete }) {
     <article className="pairing-card">
       <div className="card-pills">
         <div className="card-genre-pill">{pairing.genre}</div>
+        {pairing.subgenre && <div className="card-genre-pill card-sub-pill">{pairing.subgenre}</div>}
         {pairing.transition_type && <div className="card-genre-pill card-type-pill">{pairing.transition_type}</div>}
         {pairing.is_private && <div className="card-genre-pill card-private-pill">🔒 Private</div>}
       </div>
@@ -358,9 +367,11 @@ function AccountMenu({ user, onNav, onSignOut }) {
 
 function ProfilePage({ tab, setTab, pairings, user, likedIds, onLike, onDelete, onBack }) {
   const [genre, setGenre] = useState("All");
+  const [sub, setSub] = useState("");
   const [sort, setSort] = useState("recent");
   let list = tab === "posts" ? pairings.filter((p) => p.user_id === user?.id || p.local) : pairings.filter((p) => likedIds.has(p.id));
   if (genre !== "All") list = list.filter((p) => p.genre === genre);
+  if (sub) list = list.filter((p) => p.subgenre === sub);
   list = sortList(list, sort);
   return (
     <main className="feed">
@@ -370,9 +381,15 @@ function ProfilePage({ tab, setTab, pairings, user, likedIds, onLike, onDelete, 
         <button className={tab === "likes" ? "active" : ""} onClick={() => setTab("likes")}>My Likes</button>
       </div>
       <div className="profile-filters">
-        <select className="select-input" value={genre} onChange={(e) => setGenre(e.target.value)}>
+        <select className="select-input" value={genre} onChange={(e) => { setGenre(e.target.value); setSub(""); }}>
           {GENRES.map((g) => <option key={g} value={g}>{g === "All" ? "All genres" : g}</option>)}
         </select>
+        {genre !== "All" && (
+          <select className="select-input" value={sub} onChange={(e) => setSub(e.target.value)}>
+            <option value="">All {genre}</option>
+            {(GENRE_TREE[genre] || []).map((x) => <option key={x} value={x}>{x}</option>)}
+          </select>
+        )}
         <SortSelect value={sort} onChange={setSort} />
       </div>
       {list.length === 0 ? (
@@ -396,6 +413,7 @@ function SubmitForm({ onSubmit, onClose }) {
   const [tsB, setTsB] = useState("");
   const [type, setType] = useState("");
   const [genre, setGenre] = useState("House");
+  const [subgenre, setSubgenre] = useState("");
   const [isPrivate, setIsPrivate] = useState(false);
   const [note, setNote] = useState("");
   const [loading, setLoading] = useState(false);
@@ -414,7 +432,7 @@ function SubmitForm({ onSubmit, onClose }) {
     setError("");
     setLoading(true);
     await onSubmit({
-      songA, songB, tsA: a, tsB: b, genre,
+      songA, songB, tsA: a, tsB: b, genre, subgenre,
       note: note.trim(), transitionType: type, isPrivate,
     });
     setLoading(false);
@@ -466,16 +484,23 @@ function SubmitForm({ onSubmit, onClose }) {
           </div>
         </div>
 
-        <div className="form-grid-2">
+        <div className="form-grid-3">
           <div className="ts-field">
             <label className="ts-label-text">Genre</label>
-            <select className="select-input" value={genre} onChange={(e) => setGenre(e.target.value)}>
+            <select className="select-input" value={genre} onChange={(e) => { setGenre(e.target.value); setSubgenre(""); }}>
               {GENRES.filter((g) => g !== "All").map((g) => <option key={g} value={g}>{g}</option>)}
             </select>
           </div>
-          <label className="private-toggle">
+          <div className="ts-field">
+            <label className="ts-label-text">Subgenre <span className="optional">(optional)</span></label>
+            <select className="select-input" value={subgenre} onChange={(e) => setSubgenre(e.target.value)}>
+              <option value="">None</option>
+              {(GENRE_TREE[genre] || []).map((g) => <option key={g} value={g}>{g}</option>)}
+            </select>
+          </div>
+          <label className="private-toggle" title="Only you can see private posts">
             <input type="checkbox" checked={isPrivate} onChange={(e) => setIsPrivate(e.target.checked)} />
-            <span>🔒 Post privately <em>(only you can see it)</em></span>
+            <span>🔒 Private post</span>
           </label>
         </div>
 
@@ -508,6 +533,7 @@ export default function App() {
   const [pairings, setPairings] = useState([]);
   const [likedIds, setLikedIds] = useState(new Set());
   const [activeGenre, setActiveGenre] = useState("All");
+  const [activeSub, setActiveSub] = useState("");
   const [sort, setSort] = useState("recent");
   const [searchSong, setSearchSong] = useState(null);
   const [showForm, setShowForm] = useState(false);
@@ -566,11 +592,11 @@ export default function App() {
 
   function openSubmit() { if (requireSignIn()) setShowForm(true); }
 
-  async function handleSubmit({ songA, songB, tsA, tsB, genre, note, transitionType, isPrivate }) {
+  async function handleSubmit({ songA, songB, tsA, tsB, genre, subgenre, note, transitionType, isPrivate }) {
     const row = {
       song_a_title: songA.title, song_a_artist: songA.artist, song_a_mb_id: songA.id,
       song_b_title: songB.title, song_b_artist: songB.artist, song_b_mb_id: songB.id,
-      timestamp_a: tsA, timestamp_b: tsB, genre, note,
+      timestamp_a: tsA, timestamp_b: tsB, genre, subgenre: subgenre || null, note,
       transition_type: transitionType, is_private: isPrivate,
     };
     if (!isDemo) {
@@ -610,6 +636,7 @@ export default function App() {
   // ── main feed filtering ──
   let feed = pairings;
   if (activeGenre !== "All") feed = feed.filter((p) => p.genre === activeGenre);
+  if (activeSub) feed = feed.filter((p) => p.subgenre === activeSub);
   if (searchSong) {
     const q = searchSong.title.toLowerCase();
     feed = feed.filter((p) =>
@@ -657,11 +684,24 @@ export default function App() {
             </div>
           </section>
 
-          <div className="genre-bar">
-            {GENRES.map((g) => (
-              <button key={g} className={`genre-pill ${activeGenre === g ? "active" : ""}`} onClick={() => setActiveGenre(g)}>{g}</button>
-            ))}
-            <SortSelect value={sort} onChange={setSort} />
+          <div className="filters">
+            <div className="genre-bar">
+              {GENRES.map((g) => (
+                <button key={g} className={`genre-pill ${activeGenre === g ? "active" : ""}`}
+                  onClick={() => { setActiveGenre(g); setActiveSub(""); }}>{g}</button>
+              ))}
+            </div>
+            <div className="filter-row2">
+              <SortSelect value={sort} onChange={setSort} />
+              {activeGenre !== "All" && (GENRE_TREE[activeGenre] || []).length > 0 && (
+                <div className="sub-pills">
+                  <button className={`sub-pill ${!activeSub ? "active" : ""}`} onClick={() => setActiveSub("")}>All {activeGenre}</button>
+                  {GENRE_TREE[activeGenre].map((sg) => (
+                    <button key={sg} className={`sub-pill ${activeSub === sg ? "active" : ""}`} onClick={() => setActiveSub(sg)}>{sg}</button>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
 
           <main className="feed">
