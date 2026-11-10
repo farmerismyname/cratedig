@@ -5,7 +5,7 @@ import { createClient } from "@supabase/supabase-js";
 // Replace these with your own Supabase project URL + anon key
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || "YOUR_SUPABASE_URL";
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || "YOUR_SUPABASE_ANON_KEY";
-const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { auth: { persistSession: true, detectSessionInUrl: true } });
 
 // ─── Song search (Spotify → iTunes → MusicBrainz) ──────────────────────────────
 function formatMs(ms) {
@@ -256,15 +256,16 @@ function SongSearch({ label, value, onChange, placeholder = "Search for a track�
   );
 }
 
-function PairingCard({ pairing, onUpvote }) {
-  const [voted, setVoted] = useState(false);
+const SORTS = [["recent", "Recent"], ["likes", "Most liked"]];
 
-  function handleVote() {
-    if (voted) return;
-    setVoted(true);
-    onUpvote(pairing.id);
-  }
+function sortList(list, sort) {
+  const byDate = (a, b) => new Date(b.created_at) - new Date(a.created_at);
+  return [...list].sort((a, b) =>
+    sort === "likes" ? (b.like_count || 0) - (a.like_count || 0) || byDate(a, b) : byDate(a, b)
+  );
+}
 
+function PairingCard({ pairing, liked, onLike, canDelete, onDelete }) {
   return (
     <article className="pairing-card">
       <div className="card-pills">
@@ -285,13 +286,11 @@ function PairingCard({ pairing, onUpvote }) {
             <span className="ts-value">{pairing.timestamp_a}</span>
           </div>
         </div>
-
         <div className="transition-arrow">
           <svg width="40" height="16" viewBox="0 0 40 16">
             <path d="M0 8 H32 M28 2 L38 8 L28 14" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
           </svg>
         </div>
-
         <div className="track track-b">
           <div className="track-label">B</div>
           <div className="track-info">
@@ -305,18 +304,88 @@ function PairingCard({ pairing, onUpvote }) {
         </div>
       </div>
 
-      {pairing.note && (
-        <p className="card-note">"{pairing.note}"</p>
-      )}
+      {pairing.note && <p className="card-note">"{pairing.note}"</p>}
 
       <div className="card-footer">
         <span className="card-time">{timeAgo(pairing.created_at)}</span>
-        <button className={`upvote-btn ${voted ? "voted" : ""}`} onClick={handleVote}>
-          <span className="upvote-arrow">▲</span>
-          <span className="upvote-count">{(pairing.upvotes || 0) + (voted ? 1 : 0)}</span>
-        </button>
+        <div className="card-actions">
+          {canDelete && <button className="delete-btn" onClick={() => onDelete(pairing.id)}>Delete</button>}
+          <button className={`upvote-btn ${liked ? "voted" : ""}`} onClick={() => onLike(pairing.id)} aria-label="Like">
+            <span className="upvote-arrow">{liked ? "♥" : "♡"}</span>
+            <span className="upvote-count">{pairing.like_count || 0}</span>
+          </button>
+        </div>
       </div>
     </article>
+  );
+}
+
+function SortSelect({ value, onChange }) {
+  return (
+    <select className="select-input sort-select" value={value} onChange={(e) => onChange(e.target.value)}>
+      {SORTS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+    </select>
+  );
+}
+
+function AccountMenu({ user, onNav, onSignOut }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  useEffect(() => {
+    const h = (e) => ref.current && !ref.current.contains(e.target) && setOpen(false);
+    document.addEventListener("mousedown", h);
+    return () => document.removeEventListener("mousedown", h);
+  }, []);
+  const meta = user.user_metadata || {};
+  const name = meta.full_name || meta.name || user.email || "Account";
+  const go = (v) => { setOpen(false); onNav(v); };
+  return (
+    <div className="account" ref={ref}>
+      <button className="avatar-btn" onClick={() => setOpen(!open)} aria-label="Account menu">
+        {meta.avatar_url ? <img src={meta.avatar_url} alt="" referrerPolicy="no-referrer" /> : <span>{name[0]?.toUpperCase()}</span>}
+      </button>
+      {open && (
+        <div className="account-menu">
+          <div className="account-name">{name}</div>
+          <button onClick={() => go("posts")}>My Posts</button>
+          <button onClick={() => go("likes")}>My Likes</button>
+          <button onClick={() => { setOpen(false); onSignOut(); }}>Sign out</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ProfilePage({ tab, setTab, pairings, user, likedIds, onLike, onDelete, onBack }) {
+  const [genre, setGenre] = useState("All");
+  const [sort, setSort] = useState("recent");
+  let list = tab === "posts" ? pairings.filter((p) => p.user_id === user?.id || p.local) : pairings.filter((p) => likedIds.has(p.id));
+  if (genre !== "All") list = list.filter((p) => p.genre === genre);
+  list = sortList(list, sort);
+  return (
+    <main className="feed">
+      <button className="clear-search" onClick={onBack}>← Back to feed</button>
+      <div className="profile-tabs">
+        <button className={tab === "posts" ? "active" : ""} onClick={() => setTab("posts")}>My Posts</button>
+        <button className={tab === "likes" ? "active" : ""} onClick={() => setTab("likes")}>My Likes</button>
+      </div>
+      <div className="profile-filters">
+        <select className="select-input" value={genre} onChange={(e) => setGenre(e.target.value)}>
+          {GENRES.map((g) => <option key={g} value={g}>{g === "All" ? "All genres" : g}</option>)}
+        </select>
+        <SortSelect value={sort} onChange={setSort} />
+      </div>
+      {list.length === 0 ? (
+        <div className="empty-state"><span className="empty-icon">◈</span><p>{tab === "posts" ? "You haven't posted any mixes yet." : "You haven't liked anything yet."}</p></div>
+      ) : (
+        <div className="feed-grid">
+          {list.map((p) => (
+            <PairingCard key={p.id} pairing={p} liked={likedIds.has(p.id)} onLike={onLike}
+              canDelete={tab === "posts"} onDelete={onDelete} />
+          ))}
+        </div>
+      )}
+    </main>
   );
 }
 
@@ -435,162 +504,187 @@ function SubmitForm({ onSubmit, onClose }) {
 
 // ─── Main App ─────────────────────────────────────────────────────────────────
 export default function App() {
+  const [user, setUser] = useState(null);
   const [pairings, setPairings] = useState([]);
-  const [filteredPairings, setFilteredPairings] = useState([]);
+  const [likedIds, setLikedIds] = useState(new Set());
   const [activeGenre, setActiveGenre] = useState("All");
+  const [sort, setSort] = useState("recent");
   const [searchSong, setSearchSong] = useState(null);
   const [showForm, setShowForm] = useState(false);
   const [loading, setLoading] = useState(true);
   const [isDemo, setIsDemo] = useState(false);
+  const [view, setView] = useState("feed");
+  const [profileTab, setProfileTab] = useState("posts");
 
-  useEffect(() => { fetchPairings(); }, []);
-
+  // ── auth ──
   useEffect(() => {
-    let list = [...pairings];
-    if (activeGenre !== "All") list = list.filter(p => p.genre === activeGenre);
-    if (searchSong) {
-      const q = searchSong.title.toLowerCase();
-      list = list.filter(p =>
-        p.song_a_title.toLowerCase().includes(q) || p.song_b_title.toLowerCase().includes(q) ||
-        p.song_a_artist.toLowerCase().includes(q) || p.song_b_artist.toLowerCase().includes(q)
-      );
-    }
-    setFilteredPairings(list);
-  }, [pairings, activeGenre, searchSong]);
+    if (!supabase) return;
+    supabase.auth.getSession().then(({ data }) => setUser(data.session?.user ?? null));
+    const { data } = supabase.auth.onAuthStateChange((_e, session) => setUser(session?.user ?? null));
+    return () => data.subscription.unsubscribe();
+  }, []);
+
+  async function signIn() {
+    if (!supabase) return alert("Sign-in needs Supabase to be connected.");
+    await supabase.auth.signInWithOAuth({ provider: "google", options: { redirectTo: window.location.origin } });
+  }
+
+  async function signOut() {
+    await supabase.auth.signOut();
+    setView("feed");
+  }
+
+  // ── data ──
+  useEffect(() => { fetchPairings(); loadLikes(); }, [user?.id]);
 
   async function fetchPairings() {
     setLoading(true);
     try {
-      if (SUPABASE_URL === "YOUR_SUPABASE_URL") throw new Error("demo");
+      if (!supabase) throw new Error("demo");
       const { data, error } = await supabase
-        .from("pairings")
-        .select("*")
-        .or(`is_private.eq.false,owner_id.eq.${getOwnerId()}`)
-        .order("created_at", { ascending: false })
-        .limit(50);
+        .from("pairings").select("*").order("created_at", { ascending: false }).limit(200);
       if (error) throw error;
       setPairings(data || []);
+      setIsDemo(false);
     } catch {
-      setPairings(DEMO_PAIRINGS);
+      setPairings(DEMO_PAIRINGS.map((p) => ({ ...p, like_count: p.upvotes })));
       setIsDemo(true);
     }
     setLoading(false);
   }
 
-  async function handleSubmit({ songA, songB, tsA, tsB, genre, note, transitionType, isPrivate }) {
-    const newPairing = {
-      song_a_title: songA.title,
-      song_a_artist: songA.artist,
-      song_a_mb_id: songA.id,
-      song_b_title: songB.title,
-      song_b_artist: songB.artist,
-      song_b_mb_id: songB.id,
-      timestamp_a: tsA,
-      timestamp_b: tsB,
-      genre,
-      note,
-      transition_type: transitionType,
-      is_private: isPrivate,
-      owner_id: getOwnerId(),
-      upvotes: 0,
-      created_at: new Date().toISOString(),
-    };
+  async function loadLikes() {
+    if (!supabase || !user) return setLikedIds(new Set());
+    const { data } = await supabase.from("likes").select("pairing_id");
+    setLikedIds(new Set((data || []).map((r) => r.pairing_id)));
+  }
 
+  function requireSignIn() {
+    if (supabase && !user) { signIn(); return false; }
+    return true;
+  }
+
+  function openSubmit() { if (requireSignIn()) setShowForm(true); }
+
+  async function handleSubmit({ songA, songB, tsA, tsB, genre, note, transitionType, isPrivate }) {
+    const row = {
+      song_a_title: songA.title, song_a_artist: songA.artist, song_a_mb_id: songA.id,
+      song_b_title: songB.title, song_b_artist: songB.artist, song_b_mb_id: songB.id,
+      timestamp_a: tsA, timestamp_b: tsB, genre, note,
+      transition_type: transitionType, is_private: isPrivate,
+    };
     if (!isDemo) {
-      const { data, error } = await supabase.from("pairings").insert([newPairing]).select();
-      if (!error && data) {
-        setPairings(prev => [data[0], ...prev]);
-      }
+      const { data, error } = await supabase.from("pairings").insert([row]).select();
+      if (error) return alert("Couldn't post: " + error.message);
+      setPairings((prev) => [data[0], ...prev]);
     } else {
-      setPairings(prev => [{ ...newPairing, id: `local-${Date.now()}` }, ...prev]);
+      setPairings((prev) => [{ ...row, id: `local-${Date.now()}`, like_count: 0, local: true, created_at: new Date().toISOString() }, ...prev]);
     }
     setShowForm(false);
   }
 
-  async function handleUpvote(id) {
-    if (!isDemo) {
-      const pairing = pairings.find(p => p.id === id);
-      await supabase.from("pairings").update({ upvotes: (pairing?.upvotes || 0) + 1 }).eq("id", id);
-    }
-    setPairings(prev => prev.map(p => p.id === id ? { ...p, upvotes: (p.upvotes || 0) + 1 } : p));
+  async function toggleLike(id) {
+    if (!requireSignIn()) return;
+    const liked = likedIds.has(id);
+    const apply = (d) => {
+      setLikedIds((prev) => { const n = new Set(prev); d > 0 ? n.add(id) : n.delete(id); return n; });
+      setPairings((prev) => prev.map((p) => p.id === id ? { ...p, like_count: Math.max(0, (p.like_count || 0) + d) } : p));
+    };
+    apply(liked ? -1 : 1);
+    if (isDemo) return;
+    const { error } = liked
+      ? await supabase.from("likes").delete().eq("pairing_id", id).eq("user_id", user.id)
+      : await supabase.from("likes").insert({ pairing_id: id });
+    if (error) apply(liked ? 1 : -1);
   }
+
+  async function deletePost(id) {
+    if (!window.confirm("Delete this post?")) return;
+    if (!isDemo) {
+      const { error } = await supabase.from("pairings").delete().eq("id", id);
+      if (error) return alert("Couldn't delete: " + error.message);
+    }
+    setPairings((prev) => prev.filter((p) => p.id !== id));
+  }
+
+  // ── main feed filtering ──
+  let feed = pairings;
+  if (activeGenre !== "All") feed = feed.filter((p) => p.genre === activeGenre);
+  if (searchSong) {
+    const q = searchSong.title.toLowerCase();
+    feed = feed.filter((p) =>
+      [p.song_a_title, p.song_b_title, p.song_a_artist, p.song_b_artist].some((x) => x.toLowerCase().includes(q)));
+  }
+  feed = sortList(feed, sort);
+
+  const nav = (v) => { setProfileTab(v); setView("profile"); };
 
   return (
     <div className="app">
-      {/* Background noise texture */}
       <div className="bg-noise" />
 
-      {/* Header */}
       <header className="header">
         <div className="header-inner">
-          <div className="logo">
+          <div className="logo" onClick={() => setView("feed")} style={{ cursor: "pointer" }}>
             <span className="logo-icon">◈</span>
             <span className="logo-text">CrateDig</span>
           </div>
           <p className="logo-tagline">Community transitions for DJs</p>
-          <button className="add-btn" onClick={() => setShowForm(true)}>
-            <span>+ Submit Mix</span>
-          </button>
+          <button className="add-btn" onClick={openSubmit}><span>+ Submit Mix</span></button>
+          {user
+            ? <AccountMenu user={user} onNav={nav} onSignOut={signOut} />
+            : supabase && <button className="signin-btn" onClick={signIn}>Sign in with Google</button>}
         </div>
       </header>
 
-      {/* Hero search */}
-      <section className="hero">
-        <h1 className="hero-title">Find your next transition.</h1>
-        <p className="hero-sub">Search any track — see what DJs are mixing with it.</p>
-        <div className="hero-search">
-          <SongSearch
-            value={searchSong}
-            onChange={setSearchSong}
-            placeholder="Search any track to see compatible mixes…"
-          />
-          {searchSong && (
-            <button className="clear-search" onClick={() => setSearchSong(null)}>Clear search ✕</button>
-          )}
-        </div>
-      </section>
-
-      {/* Genre filter bar */}
-      <div className="genre-bar">
-        {GENRES.map(g => (
-          <button
-            key={g}
-            className={`genre-pill ${activeGenre === g ? "active" : ""}`}
-            onClick={() => setActiveGenre(g)}
-          >{g}</button>
-        ))}
-      </div>
-
-      {/* Demo banner */}
       {isDemo && (
         <div className="demo-banner">
           ⚡ Running in demo mode — connect Supabase to save mixes permanently. See <code>README.md</code> for setup.
         </div>
       )}
 
-      {/* Feed */}
-      <main className="feed">
-        {loading ? (
-          <div className="loading-state">
-            <span className="loading-spinner">◌</span>
-            <p>Loading mixes…</p>
-          </div>
-        ) : filteredPairings.length === 0 ? (
-          <div className="empty-state">
-            <span className="empty-icon">◈</span>
-            <p>No mixes found{searchSong ? ` for "${searchSong.title}"` : ""}.</p>
-            <button className="add-btn" onClick={() => setShowForm(true)}>Be the first to submit one →</button>
-          </div>
-        ) : (
-          <div className="feed-grid">
-            {filteredPairings.map(p => (
-              <PairingCard key={p.id} pairing={p} onUpvote={handleUpvote} />
-            ))}
-          </div>
-        )}
-      </main>
+      {view === "profile" && user ? (
+        <ProfilePage tab={profileTab} setTab={setProfileTab} pairings={pairings} user={user}
+          likedIds={likedIds} onLike={toggleLike} onDelete={deletePost} onBack={() => setView("feed")} />
+      ) : (
+        <>
+          <section className="hero">
+            <h1 className="hero-title">Find your next transition.</h1>
+            <p className="hero-sub">Search any track — see what DJs are mixing with it.</p>
+            <div className="hero-search">
+              <SongSearch value={searchSong} onChange={setSearchSong} placeholder="Search any track to see compatible mixes…" />
+              {searchSong && <button className="clear-search" onClick={() => setSearchSong(null)}>Clear search ✕</button>}
+            </div>
+          </section>
 
-      {/* Submit Modal */}
+          <div className="genre-bar">
+            {GENRES.map((g) => (
+              <button key={g} className={`genre-pill ${activeGenre === g ? "active" : ""}`} onClick={() => setActiveGenre(g)}>{g}</button>
+            ))}
+            <SortSelect value={sort} onChange={setSort} />
+          </div>
+
+          <main className="feed">
+            {loading ? (
+              <div className="loading-state"><span className="loading-spinner">◌</span><p>Loading mixes…</p></div>
+            ) : feed.length === 0 ? (
+              <div className="empty-state">
+                <span className="empty-icon">◈</span>
+                <p>No mixes found{searchSong ? ` for "${searchSong.title}"` : ""}.</p>
+                <button className="add-btn" onClick={openSubmit}>Be the first to submit one →</button>
+              </div>
+            ) : (
+              <div className="feed-grid">
+                {feed.map((p) => (
+                  <PairingCard key={p.id} pairing={p} liked={likedIds.has(p.id)} onLike={toggleLike}
+                    canDelete={!!user && p.user_id === user.id} onDelete={deletePost} />
+                ))}
+              </div>
+            )}
+          </main>
+        </>
+      )}
+
       {showForm && <SubmitForm onSubmit={handleSubmit} onClose={() => setShowForm(false)} />}
     </div>
   );
