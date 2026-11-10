@@ -111,15 +111,13 @@ function getOwnerId() {
 
 // ─── Genres ───────────────────────────────────────────────────────────────────
 const GENRE_TREE = {
-  "House": ["Deep house", "Tech house", "Progressive house", "Future house", "Afro house", "Acid house", "Electro house"],
-  "Drum n bass": ["Liquid", "Neurofunk", "Jump up", "Techstep", "Halftime"],
-  "Dubstep": ["Brostep", "Melodic dubstep", "Deep dubstep", "Tearout", "Deathstep"],
-  "Riddim": ["Minimal riddim", "Heavy riddim", "Melodic riddim"],
-  "Techno": ["Melodic techno", "Industrial techno", "Minimal techno", "Acid techno", "Hard techno"],
-  "Trance": ["Progressive trance", "Psytrance", "Uplifting trance", "Vocal trance", "Tech trance"],
-  "Trap": ["Festival trap", "Hybrid trap", "Chill trap", "Hard trap"],
-  "Jungle": ["Ragga jungle", "Old school jungle", "Darkcore"],
-  "Pop": ["Dance pop", "Electropop", "Synthpop", "Indie pop"],
+  "House": ["Bass House", "Tech", "Progressive", "Deep", "Afro", "Electro", "Speed", "French", "Chicago"],
+  "Dubstep": ["Brostep", "Riddim", "Wubz", "Deep", "Melodic", "Tearout", "Deathstep"],
+  "Drum n Bass": ["Dancefloor", "Liquid", "Jump-Up", "Neurofunk", "Minimal", "Jungle", "Breakbeat"],
+  "Techno": ["Hard Techno", "Rolling", "Acid", "Melodic", "Minimal", "Hardcore"],
+  "Trap": [],
+  "Trance": ["Psytrance", "Uplifting", "Progressive", "Hard"],
+  "Pop": ["60s-90s", "Y2K", "Singalong"],
 };
 const GENRES = ["All", ...Object.keys(GENRE_TREE)];
 
@@ -146,7 +144,7 @@ const DEMO_PAIRINGS = [
     song_b_artist: "DJ Barber / Carolina Carol Bela",
     timestamp_a: "6:10",
     timestamp_b: "0:00",
-    genre: "Drum n bass",
+    genre: "Drum n Bass",
     note: "Chop the amen breakdown hard. Reese bass locks in perfectly at 138bpm.",
     upvotes: 51,
     created_at: new Date(Date.now() - 86400000 * 1).toISOString(),
