@@ -463,7 +463,7 @@ function SubmitForm({ onSubmit, onClose }) {
             />
           </div>
           <div className="ts-field">
-            <label className="ts-label-text">Start timestamp:</label>
+            <label className="ts-label-text">Song 2 Start timestamp:</label>
             <input
               className="ts-input"
               inputMode="numeric"
