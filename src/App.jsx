@@ -463,7 +463,7 @@ function SubmitForm({ onSubmit, onClose }) {
             />
           </div>
           <div className="ts-field">
-            <label className="ts-label-text">Transition in at</label>
+            <label className="ts-label-text">Start timestamp:</label>
             <input
               className="ts-input"
               inputMode="numeric"
