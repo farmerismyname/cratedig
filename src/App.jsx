@@ -452,7 +452,7 @@ function SubmitForm({ onSubmit, onClose }) {
 
         <div className="form-grid-3">
           <div className="ts-field">
-            <label className="ts-label-text">Transition out at</label>
+            <label className="ts-label-text">Transition out/start song 2 at:</label>
             <input
               className="ts-input"
               inputMode="numeric"
